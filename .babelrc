@@ -1,0 +1,10 @@
+{
+  "presets": ["@babel/preset-typescript", "@babel/preset-react"],
+  "plugins": [
+    "@babel/plugin-syntax-typescript",
+    "@babel/plugin-transform-modules-commonjs",
+    "@babel/plugin-transform-typescript",
+    ["@babel/plugin-proposal-decorators", { "legacy": true }],
+    ["@babel/plugin-proposal-class-properties"]
+  ]
+}
