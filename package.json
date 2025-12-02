@@ -4,7 +4,8 @@
   "description": "local codemods",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky"
   },
   "author": "",
   "license": "ISC",
@@ -14,7 +15,10 @@
     "@babel/plugin-transform-modules-commonjs": "^7.26.3",
     "@babel/plugin-transform-typescript": "^7.27.0",
     "@babel/preset-react": "^7.26.3",
-    "@babel/preset-typescript": "^7.27.0"
+    "@babel/preset-typescript": "^7.27.0",
+    "@commitlint/cli": "^20.1.0",
+    "@commitlint/config-conventional": "^20.0.0",
+    "husky": "^9.1.7"
   },
   "dependencies": {
     "@babel/core": "^7.26.10",
