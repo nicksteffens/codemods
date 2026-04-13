@@ -246,6 +246,57 @@ for vfile in .node-version .ruby-version .python-version; do
   fi
 done
 
+# Validate outputs
+VALID=true
+
+# Validate mise.toml
+if [[ -f "$TARGET_DIR/mise.toml" ]]; then
+  if ! python3 -c "
+import sys
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+with open('$TARGET_DIR/mise.toml', 'rb') as f:
+    tomllib.load(f)
+" 2>/dev/null; then
+    # tomllib requires python 3.11+, fall back to basic syntax check
+    if ! python3 -c "
+import re, sys
+content = open('$TARGET_DIR/mise.toml').read()
+# check for basic TOML structure
+if not re.search(r'^\[tools\]', content, re.MULTILINE):
+    sys.exit(1)
+for line in content.strip().splitlines():
+    line = line.strip()
+    if not line or line.startswith('#') or line.startswith('['):
+        continue
+    if '=' not in line:
+        sys.exit(1)
+" 2>/dev/null; then
+      echo "ERROR: mise.toml failed validation!" >&2
+      VALID=false
+    fi
+  fi
+  if [[ "$VALID" == true ]]; then
+    echo "Validated mise.toml"
+  fi
+fi
+
+# Validate modified package.json files
+for f in "${PKG_FILES[@]}"; do
+  if ! python3 -c "import json; json.load(open('$f'))" 2>/dev/null; then
+    echo "ERROR: ${f#"$TARGET_DIR/"} is not valid JSON!" >&2
+    VALID=false
+  fi
+done
+
+if [[ "$VALID" == false ]]; then
+  echo "Validation failed — check the files above." >&2
+  exit 1
+fi
+echo "Validated all package.json files"
+
 echo "
 ---
 Migration complete. Next steps:
