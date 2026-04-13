@@ -96,6 +96,9 @@ npx jscodeshift -t <codemod>.js 'src/**/*.tsx' --parser=tsx
 - `material.js` - Transform `@material-ui/*` → `@mui/material`
 - `icons-material.js` - Transform `@material-ui/icons` → `@mui/icons-material`
 
+### volta-to-mise/
+- `migrate.sh` - Migrate repos from Volta to mise for tool version management ([docs](volta-to-mise/README.md))
+
 ### percy/ (planned)
 - `cypress-percy-to-screenshot.js` - Transform `cy.percySnapshot()` → `cy.screenshot()`
 - `ember-percy-to-screenshot.js` - Transform Percy helper to local screenshot
