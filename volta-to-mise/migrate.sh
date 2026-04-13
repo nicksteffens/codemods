@@ -16,18 +16,21 @@
 # Usage:
 #   ./volta-to-mise/migrate.sh <target-dir>
 #   ./volta-to-mise/migrate.sh <target-dir> --dry-run
+#   ./volta-to-mise/migrate.sh <target-dir> --keep-volta     # don't remove volta from package.json
 #   ./volta-to-mise/migrate.sh <target-dir> --include-env
 
 set -euo pipefail
 
 DRY_RUN=false
 INCLUDE_ENV=false
+KEEP_VOLTA=false
 TARGET_DIR=""
 
 for arg in "$@"; do
   case "$arg" in
-    --dry-run)  DRY_RUN=true ;;
+    --dry-run)     DRY_RUN=true ;;
     --include-env) INCLUDE_ENV=true ;;
+    --keep-volta)  KEEP_VOLTA=true ;;
     -*) echo "Unknown flag: $arg" >&2; exit 1 ;;
     *)  TARGET_DIR="$arg" ;;
   esac
@@ -201,9 +204,13 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "[dry run] No files modified."
   echo ""
   echo "Would create: mise.toml"
-  for f in "${PKG_FILES[@]}"; do
-    echo "Would modify: ${f#"$TARGET_DIR/"} (remove volta field)"
-  done
+  if [[ "$KEEP_VOLTA" == false ]]; then
+    for f in "${PKG_FILES[@]}"; do
+      echo "Would modify: ${f#"$TARGET_DIR/"} (remove volta field)"
+    done
+  else
+    echo "Would keep volta in all package.json files (--keep-volta)"
+  fi
   for vfile in .node-version .ruby-version .python-version; do
     [[ -f "$TARGET_DIR/$vfile" ]] && echo "Would delete: $vfile"
   done
@@ -221,10 +228,14 @@ else
 fi
 
 # Remove volta from all package.json files
-for f in "${PKG_FILES[@]}"; do
-  json_remove_key "$f" "volta"
-  echo "Removed volta from ${f#"$TARGET_DIR/"}"
-done
+if [[ "$KEEP_VOLTA" == false ]]; then
+  for f in "${PKG_FILES[@]}"; do
+    json_remove_key "$f" "volta"
+    echo "Removed volta from ${f#"$TARGET_DIR/"}"
+  done
+else
+  echo "Kept volta in all package.json files (--keep-volta)"
+fi
 
 # Delete version files
 for vfile in .node-version .ruby-version .python-version; do
@@ -234,6 +245,57 @@ for vfile in .node-version .ruby-version .python-version; do
     echo "Deleted $vfile (version absorbed into mise.toml)"
   fi
 done
+
+# Validate outputs
+VALID=true
+
+# Validate mise.toml
+if [[ -f "$TARGET_DIR/mise.toml" ]]; then
+  if ! python3 -c "
+import sys
+try:
+    import tomllib
+except ImportError:
+    import tomli as tomllib
+with open('$TARGET_DIR/mise.toml', 'rb') as f:
+    tomllib.load(f)
+" 2>/dev/null; then
+    # tomllib requires python 3.11+, fall back to basic syntax check
+    if ! python3 -c "
+import re, sys
+content = open('$TARGET_DIR/mise.toml').read()
+# check for basic TOML structure
+if not re.search(r'^\[tools\]', content, re.MULTILINE):
+    sys.exit(1)
+for line in content.strip().splitlines():
+    line = line.strip()
+    if not line or line.startswith('#') or line.startswith('['):
+        continue
+    if '=' not in line:
+        sys.exit(1)
+" 2>/dev/null; then
+      echo "ERROR: mise.toml failed validation!" >&2
+      VALID=false
+    fi
+  fi
+  if [[ "$VALID" == true ]]; then
+    echo "Validated mise.toml"
+  fi
+fi
+
+# Validate modified package.json files
+for f in "${PKG_FILES[@]}"; do
+  if ! python3 -c "import json; json.load(open('$f'))" 2>/dev/null; then
+    echo "ERROR: ${f#"$TARGET_DIR/"} is not valid JSON!" >&2
+    VALID=false
+  fi
+done
+
+if [[ "$VALID" == false ]]; then
+  echo "Validation failed — check the files above." >&2
+  exit 1
+fi
+echo "Validated all package.json files"
 
 echo "
 ---
