@@ -20,6 +20,9 @@ curl -fsSL https://raw.githubusercontent.com/nicksteffens/codemods/main/volta-to
 
 # run the migration
 curl -fsSL https://raw.githubusercontent.com/nicksteffens/codemods/main/volta-to-mise/migrate.sh | zsh -s -- .
+
+# run but keep volta in package.json (support both during transition)
+curl -fsSL https://raw.githubusercontent.com/nicksteffens/codemods/main/volta-to-mise/migrate.sh | zsh -s -- . --keep-volta
 ```
 
 ## Usage (from repo clone)
@@ -30,6 +33,9 @@ curl -fsSL https://raw.githubusercontent.com/nicksteffens/codemods/main/volta-to
 
 # run the migration
 ./volta-to-mise/migrate.sh /path/to/repo
+
+# keep volta in package.json (both tools work side by side)
+./volta-to-mise/migrate.sh /path/to/repo --keep-volta
 
 # include an [env] section template in mise.toml
 ./volta-to-mise/migrate.sh /path/to/repo --include-env

@@ -16,18 +16,21 @@
 # Usage:
 #   ./volta-to-mise/migrate.sh <target-dir>
 #   ./volta-to-mise/migrate.sh <target-dir> --dry-run
+#   ./volta-to-mise/migrate.sh <target-dir> --keep-volta     # don't remove volta from package.json
 #   ./volta-to-mise/migrate.sh <target-dir> --include-env
 
 set -euo pipefail
 
 DRY_RUN=false
 INCLUDE_ENV=false
+KEEP_VOLTA=false
 TARGET_DIR=""
 
 for arg in "$@"; do
   case "$arg" in
-    --dry-run)  DRY_RUN=true ;;
+    --dry-run)     DRY_RUN=true ;;
     --include-env) INCLUDE_ENV=true ;;
+    --keep-volta)  KEEP_VOLTA=true ;;
     -*) echo "Unknown flag: $arg" >&2; exit 1 ;;
     *)  TARGET_DIR="$arg" ;;
   esac
@@ -201,9 +204,13 @@ if [[ "$DRY_RUN" == true ]]; then
   echo "[dry run] No files modified."
   echo ""
   echo "Would create: mise.toml"
-  for f in "${PKG_FILES[@]}"; do
-    echo "Would modify: ${f#"$TARGET_DIR/"} (remove volta field)"
-  done
+  if [[ "$KEEP_VOLTA" == false ]]; then
+    for f in "${PKG_FILES[@]}"; do
+      echo "Would modify: ${f#"$TARGET_DIR/"} (remove volta field)"
+    done
+  else
+    echo "Would keep volta in all package.json files (--keep-volta)"
+  fi
   for vfile in .node-version .ruby-version .python-version; do
     [[ -f "$TARGET_DIR/$vfile" ]] && echo "Would delete: $vfile"
   done
@@ -221,10 +228,14 @@ else
 fi
 
 # Remove volta from all package.json files
-for f in "${PKG_FILES[@]}"; do
-  json_remove_key "$f" "volta"
-  echo "Removed volta from ${f#"$TARGET_DIR/"}"
-done
+if [[ "$KEEP_VOLTA" == false ]]; then
+  for f in "${PKG_FILES[@]}"; do
+    json_remove_key "$f" "volta"
+    echo "Removed volta from ${f#"$TARGET_DIR/"}"
+  done
+else
+  echo "Kept volta in all package.json files (--keep-volta)"
+fi
 
 # Delete version files
 for vfile in .node-version .ruby-version .python-version; do
