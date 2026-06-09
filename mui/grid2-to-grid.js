@@ -25,6 +25,12 @@ export default function transformer(file, api) {
   const root = j(file.source);
   let dirty = false;
 
+  // Local binding renames produced by rewriting import specifiers, e.g. an
+  // unaliased `import { Grid2 }` becomes `import { Grid }`, which changes the
+  // local name Grid2 → Grid. Every reference to that binding (JSX tags, value
+  // and type identifiers) must be renamed too, or it dangles.
+  const localRenames = new Map(); // oldLocal -> newLocal
+
   // Rename the imported name of a specifier: Grid2 → Grid, Grid2Props → GridProps.
   // Returns the (possibly new) imported name string.
   function renameImported(name) {
@@ -50,6 +56,11 @@ export default function transformer(file, api) {
       const newLocal = localName === oldImported ? newImported : localName;
       const dropAlias = newLocal === newImported;
 
+      // Record local binding renames so references can be updated below.
+      if (newLocal !== localName) {
+        localRenames.set(localName, newLocal);
+      }
+
       const newSpec = j.importSpecifier(
         j.identifier(newImported),
         dropAlias ? j.identifier(newImported) : j.identifier(newLocal)
@@ -57,6 +68,57 @@ export default function transformer(file, api) {
       // Preserve import kind (type vs value) if present
       if (spec.importKind) newSpec.importKind = spec.importKind;
       return newSpec;
+    });
+  }
+
+  // Rename every reference to a renamed local binding. Runs after imports are
+  // rewritten, so the import specifiers themselves are already updated and the
+  // remaining matches are usages in the file body.
+  function renameLocalReferences() {
+    if (localRenames.size === 0) return;
+
+    // JSX tag names: <Grid2>, </Grid2>, <Grid2.Foo>.
+    root.find(j.JSXIdentifier).forEach((path) => {
+      const newName = localRenames.get(path.node.name);
+      if (newName) {
+        path.node.name = newName;
+        dirty = true;
+      }
+    });
+
+    // Value and type identifiers: styled(Grid2), `x: Grid2Props`, etc.
+    root.find(j.Identifier).forEach((path) => {
+      const newName = localRenames.get(path.node.name);
+      if (!newName) return;
+
+      const parent = path.parent.node;
+      // Import specifiers were already rewritten above — don't touch them.
+      if (
+        parent.type === 'ImportSpecifier' ||
+        parent.type === 'ImportDefaultSpecifier' ||
+        parent.type === 'ImportNamespaceSpecifier'
+      ) {
+        return;
+      }
+      // Non-computed member property access: foo.Grid2 is not this binding.
+      if (
+        parent.type === 'MemberExpression' &&
+        parent.property === path.node &&
+        !parent.computed
+      ) {
+        return;
+      }
+      // Object property keys (non-shorthand): { Grid2: ... } is not a reference.
+      if (
+        (parent.type === 'ObjectProperty' || parent.type === 'Property') &&
+        parent.key === path.node &&
+        !parent.shorthand
+      ) {
+        return;
+      }
+
+      path.node.name = newName;
+      dirty = true;
     });
   }
 
@@ -84,6 +146,9 @@ export default function transformer(file, api) {
       path.node.specifiers = rewriteSpecifiers(path.node.specifiers);
       dirty = true;
     });
+
+  // Propagate any local binding renames to their references (JSX, identifiers).
+  renameLocalReferences();
 
   return dirty ? root.toSource({ quote: 'single' }) : file.source;
 }
